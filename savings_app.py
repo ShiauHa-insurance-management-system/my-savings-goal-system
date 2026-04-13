@@ -44,7 +44,7 @@ with st.sidebar:
     st.subheader("🆕 建立新目標")
     with st.form("new_task_form", clear_on_submit=True):
         t_name = st.text_input("任務名稱 (如：買房首期)")
-        t_goal = st.number_input("目標金額", min_value=1, step=1000)
+        t_goal = st.number_input("目標金額", min_value=1.0, step=1000.0)
         if st.form_submit_button("新增目標表"):
             if t_name:
                 new_t = pd.DataFrame([{"任務名稱": t_name, "目標金額": t_goal, "建立時間": datetime.now().strftime("%Y-%m-%d")}])
@@ -64,25 +64,27 @@ else:
     
     for idx, row in tasks_df.iterrows():
         task_name = row['任務名稱']
-        target_amt = row['目標金額']
+        target_amt = float(row['目標金額']) # 確保目標金額是數字
         
         # 計算總額
-        current_sum = 0
+        current_sum = 0.0
         if os.path.exists(DB_LOGS):
             logs_df = pd.read_csv(DB_LOGS)
-            current_sum = logs_df[logs_df['任務名稱'] == task_name]['存入金額'].sum()
+            # 確保金額列是數字，排除格式干擾
+            logs_df['存入金額'] = pd.to_numeric(logs_df['存入金額'], errors='coerce').fillna(0)
+            current_sum = float(logs_df[logs_df['任務名稱'] == task_name]['存入金額'].sum())
         
-        # 計算進度
+        # --- 核心計算邏輯修正 ---
         progress_pct = int((current_sum / target_amt) * 100) if target_amt > 0 else 0
         remain_pct = max(0, 100 - progress_pct)
         
         with st.container():
             st.markdown(f"### 🚩 {task_name}")
             c1, c2, c3, c4 = st.columns(4)
-            c1.metric("目前金額", f"${current_sum:,}")
-            c2.metric("目標金額", f"${target_amt:,}")
+            c1.metric("目前金額", f"${int(current_sum):,}")
+            c2.metric("目標金額", f"${int(target_amt):,}")
             
-            # --- 達標邏輯判斷 ---
+            # 達標邏輯
             if current_sum >= target_amt:
                 c3.markdown("<p class='success-text'>✅ 進度已達標</p>", unsafe_allow_html=True)
                 c4.metric("剩餘進度", "0%")
@@ -98,7 +100,7 @@ else:
             with ec1:
                 st.write("➕ 新增存款")
                 s_date = st.date_input("日期", datetime.now(), key=f"d_{idx}")
-                s_amt = st.number_input("金額", min_value=1, key=f"a_{idx}")
+                s_amt = st.number_input("金額", min_value=1.0, key=f"a_{idx}")
                 if st.button("確認存入", key=f"b_{idx}"):
                     new_log = pd.DataFrame([{"任務名稱": task_name, "日期": s_date.strftime("%Y-%m-%d"), "存入金額": s_amt}])
                     if os.path.exists(DB_LOGS):
