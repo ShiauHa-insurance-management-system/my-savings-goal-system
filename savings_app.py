@@ -39,7 +39,6 @@ with st.sidebar:
         t_goal = st.number_input("目標金額", min_value=1.0, step=1000.0)
         if st.form_submit_button("新增目標表"):
             if t_name:
-                # 強制清理掉所有可能導致比對失敗的空格
                 clean_name = t_name.strip()
                 new_t = pd.DataFrame([{"任務名稱": clean_name, "目標金額": t_goal}])
                 if os.path.exists(DB_TASKS):
@@ -54,26 +53,24 @@ if not os.path.exists(DB_TASKS):
     st.info("目前還沒有建立任何目標。")
 else:
     tasks_df = pd.read_csv(DB_TASKS)
-    # 讀取存款紀錄
     logs_df = pd.read_csv(DB_LOGS) if os.path.exists(DB_LOGS) else pd.DataFrame(columns=['任務名稱', '日期', '存入金額'])
     
-    # 確保所有比對欄位都是乾淨的字串
     if not logs_df.empty:
         logs_df['任務名稱'] = logs_df['任務名稱'].astype(str).str.strip()
         logs_df['存入金額'] = pd.to_numeric(logs_df['存入金額'], errors='coerce').fillna(0)
 
     for idx, row in tasks_df.iterrows():
-        # 清理任務名稱比對用
         current_name = str(row['任務名稱']).strip()
         target_amt = float(row['目標金額'])
         
-        # 核心計算：直接從 logs 篩選出該任務的所有存款
         relevant_logs = logs_df[logs_df['任務名稱'] == current_name]
         current_sum = float(relevant_logs['存入金額'].sum())
         
-        # 百分比計算（加上 round 確保不出現奇怪的小數）
-        progress_pct = int(round((current_sum / target_amt) * 100)) if target_amt > 0 else 0
-        remain_pct = max(0, 100 - progress_pct)
+        # --- 修正計算邏輯：小數點後 3 位 ---
+        # 達成率計算至小數點後 3 位
+        progress_pct = round((current_sum / target_amt) * 100, 3) if target_amt > 0 else 0.0
+        # 剩餘進度固定為 100 減去達成率，同樣取小數點 3 位
+        remain_pct = round(100.0 - progress_pct, 3) if progress_pct < 100 else 0.0
         
         with st.container():
             st.markdown(f"### 🚩 {current_name}")
@@ -88,7 +85,6 @@ else:
                 c3.metric("已達成", f"{progress_pct}%")
                 c4.metric("剩餘進度", f"{remain_pct}%")
             
-            # 進度條 (Streamlit 要求 0.0 ~ 1.0)
             st.progress(min(1.0, current_sum / target_amt) if target_amt > 0 else 0.0)
             
             exp = st.expander("⚙️ 紀錄維護與刪除目標")
@@ -108,7 +104,7 @@ else:
                 st.write("📜 歷史紀錄")
                 st.dataframe(relevant_logs[['日期', '存入金額']].sort_values("日期", ascending=False), hide_index=True, use_container_width=True)
             
-            if exp.button(f"🗑️ 永久刪除「{current_name}」", key=f"del_{idx}"):
+            if exp.button(f"🗑️ 永久刪除目標表", key=f"del_{idx}"):
                 tasks_df.drop(idx).to_csv(DB_TASKS, index=False)
                 if os.path.exists(DB_LOGS):
                     logs_df[logs_df['任務名稱'] != current_name].to_csv(DB_LOGS, index=False)
