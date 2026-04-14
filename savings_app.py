@@ -9,9 +9,11 @@ st.set_page_config(page_title="存錢目標管理系統", layout="wide")
 st.markdown("""
     <style>
     .stApp { background-color: #f8f9fa; }
-    .stButton>button { width: 100%; border-radius: 10px; font-weight: bold; }
+    .stButton>button { width: 100%; border-radius: 10px; font-weight: bold; margin-bottom: 5px; }
+    .stDownloadButton>button { width: 100%; border-radius: 10px; font-weight: bold; background-color: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; }
     [data-testid="stMetricValue"] { font-size: 1.8rem !important; color: #2e7d32; }
     .success-text { color: #2e7d32; font-weight: 800; font-size: 1.2rem; }
+    h3 { margin-bottom: 20px; border-left: 5px solid #2e7d32; padding-left: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -28,11 +30,23 @@ if not st.session_state.auth_savings:
         else: st.error("密碼錯誤")
     st.stop()
 
-# --- 3. 側邊欄 ---
+# --- 3. 側邊欄：功能台與備份 ---
 with st.sidebar:
     st.title("💰 存錢控制台")
+    
+    # 備份下載區域
+    st.subheader("📥 數據備份")
+    if os.path.exists(DB_TASKS):
+        with open(DB_TASKS, "rb") as f:
+            st.download_button("下載目標清單 (CSV)", f, "savings_tasks_backup.csv", "text/csv")
+    if os.path.exists(DB_LOGS):
+        with open(DB_LOGS, "rb") as f:
+            st.download_button("下載存款紀錄 (CSV)", f, "savings_logs_backup.csv", "text/csv")
+    
+    st.divider()
     if st.button("🔓 安全登出"): st.session_state.auth_savings = False; st.rerun()
     st.divider()
+    
     st.subheader("🆕 建立新目標")
     with st.form("new_task_form", clear_on_submit=True):
         t_name = st.text_input("任務名稱 (如：買房首期)")
@@ -66,10 +80,8 @@ else:
         relevant_logs = logs_df[logs_df['任務名稱'] == current_name]
         current_sum = float(relevant_logs['存入金額'].sum())
         
-        # --- 修正計算邏輯：小數點後 3 位 ---
-        # 達成率計算至小數點後 3 位
+        # 達成率與剩餘計算 (精確至 3 位)
         progress_pct = round((current_sum / target_amt) * 100, 3) if target_amt > 0 else 0.0
-        # 剩餘進度固定為 100 減去達成率，同樣取小數點 3 位
         remain_pct = round(100.0 - progress_pct, 3) if progress_pct < 100 else 0.0
         
         with st.container():
